@@ -49,3 +49,56 @@ def test_jsonl_adapter_reports_non_utf8_source(tmp_path: Path) -> None:
         match=r"Cannot decode JSONL source .*invalid_utf8\.jsonl as UTF-8",
     ):
         jsonl_source(path)
+
+
+def test_jsonl_adapter_handles_empty_file(tmp_path: Path) -> None:
+    path = tmp_path / "empty.jsonl"
+    path.write_text("")
+
+    source = jsonl_source(path, name="empty-test")
+    manifest = build_manifest(source)
+
+    assert manifest["scope"]["identity"]["name"] == "empty-test"
+    assert manifest["coverage"]["processed_count"] == 0
+    assert manifest["provenance"]["source_line_numbers"] == []
+    assert len(manifest["provenance"]["file_sha256"]) == 64
+
+
+def test_jsonl_adapter_handles_whitespace_only_file(tmp_path: Path) -> None:
+    path = tmp_path / "whitespace.jsonl"
+    path.write_text("   \n\n\t  \n  \n")
+
+    source = jsonl_source(path, name="whitespace-test")
+    manifest = build_manifest(source)
+
+    assert manifest["scope"]["identity"]["name"] == "whitespace-test"
+    assert manifest["coverage"]["processed_count"] == 0
+    assert manifest["provenance"]["source_line_numbers"] == []
+    assert len(manifest["provenance"]["file_sha256"]) == 64
+
+
+def test_jsonl_adapter_accepts_valid_scalar_lines(tmp_path: Path) -> None:
+    path = tmp_path / "scalars.jsonl"
+    path.write_text(sample string
+42
+true
+3.14159
+)
+
+    source = jsonl_source(path, name="scalars-test")
+    manifest = build_manifest(source)
+
+    assert manifest["coverage"]["processed_count"] == 4
+    assert manifest["provenance"]["source_line_numbers"] == [1, 2, 3, 4]
+    assert len(manifest["provenance"]["file_sha256"]) == 64
+
+
+def test_jsonl_adapter_ignores_blank_lines_around_scalar_records(tmp_path: Path) -> None:
+    path = tmp_path / "spaced_scalars.jsonl"
+    path.write_text("\n\n\"first_record\"\n\n\n100\n\n")
+
+    source = jsonl_source(path, name="spaced-scalars")
+    manifest = build_manifest(source)
+
+    assert manifest["coverage"]["processed_count"] == 2
+    assert manifest["provenance"]["source_line_numbers"] == [3, 6]
