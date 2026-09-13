@@ -71,7 +71,11 @@ def test_jsonl_adapter_empty_and_whitespace_only_sources(tmp_path: Path) -> None
 
 def test_jsonl_adapter_scalar_records_and_stable_ordered_hashes(tmp_path: Path) -> None:
     path = tmp_path / "scalars.jsonl"
-    path.write_text('"sample string"\n42\ntrue\n3.14159\n', encoding="utf-8")
+    # Blank lines before, between, and after scalar records (lines 2, 4, 5, 7)
+    path.write_text(
+        "\n\"sample string\"\n\n42\ntrue\n\n3.14159\n\n",
+        encoding="utf-8",
+    )
 
     source1 = jsonl_source(path, name="scalars-check")
     manifest1 = build_manifest(source1)
@@ -79,7 +83,7 @@ def test_jsonl_adapter_scalar_records_and_stable_ordered_hashes(tmp_path: Path) 
     assert manifest1["coverage"]["declared_count"] == 4
     assert manifest1["coverage"]["processed_count"] == 4
     assert manifest1["coverage"]["complete"] is True
-    assert manifest1["provenance"]["source_line_numbers"] == [1, 2, 3, 4]
+    assert manifest1["provenance"]["source_line_numbers"] == [2, 4, 5, 7]
     assert manifest1["samples"]["top_level_type_summary"] == {
         "__sample__": {"bool": 1, "float": 1, "int": 1, "string": 1}
     }
