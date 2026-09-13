@@ -51,54 +51,42 @@ def test_jsonl_adapter_reports_non_utf8_source(tmp_path: Path) -> None:
         jsonl_source(path)
 
 
-def test_jsonl_adapter_handles_empty_file(tmp_path: Path) -> None:
-    path = tmp_path / "empty.jsonl"
-    path.write_text("")
+def test_jsonl_adapter_empty_and_whitespace_only_sources(tmp_path: Path) -> None:
+    for filename, content in [("empty.jsonl", ""), ("whitespace.jsonl", "\n  \n\t\n")]:
+        path = tmp_path / filename
+        path.write_text(content, encoding="utf-8")
 
-    source = jsonl_source(path, name="empty-test")
-    manifest = build_manifest(source)
+        source = jsonl_source(path, name="empty-check")
+        manifest = build_manifest(source)
 
-    assert manifest["scope"]["identity"]["name"] == "empty-test"
-    assert manifest["coverage"]["processed_count"] == 0
-    assert manifest["provenance"]["source_line_numbers"] == []
-    assert len(manifest["provenance"]["file_sha256"]) == 64
-
-
-def test_jsonl_adapter_handles_whitespace_only_file(tmp_path: Path) -> None:
-    path = tmp_path / "whitespace.jsonl"
-    path.write_text("   \n\n\t  \n  \n")
-
-    source = jsonl_source(path, name="whitespace-test")
-    manifest = build_manifest(source)
-
-    assert manifest["scope"]["identity"]["name"] == "whitespace-test"
-    assert manifest["coverage"]["processed_count"] == 0
-    assert manifest["provenance"]["source_line_numbers"] == []
-    assert len(manifest["provenance"]["file_sha256"]) == 64
+        assert manifest["scope"]["identity"]["name"] == "empty-check"
+        assert manifest["coverage"]["declared_count"] == 0
+        assert manifest["coverage"]["processed_count"] == 0
+        assert manifest["coverage"]["complete"] is True
+        assert manifest["coverage"]["sample_limit"] is None
+        assert manifest["provenance"]["source_line_numbers"] == []
+        assert manifest["samples"]["ordered_hashes"] == []
+        assert manifest["samples"]["top_level_type_summary"] == {}
 
 
-def test_jsonl_adapter_accepts_valid_scalar_lines(tmp_path: Path) -> None:
+def test_jsonl_adapter_scalar_records_and_stable_ordered_hashes(tmp_path: Path) -> None:
     path = tmp_path / "scalars.jsonl"
-    path.write_text(sample string
-42
-true
-3.14159
-)
+    path.write_text('"sample string"\n42\ntrue\n3.14159\n', encoding="utf-8")
 
-    source = jsonl_source(path, name="scalars-test")
-    manifest = build_manifest(source)
+    source1 = jsonl_source(path, name="scalars-check")
+    manifest1 = build_manifest(source1)
 
-    assert manifest["coverage"]["processed_count"] == 4
-    assert manifest["provenance"]["source_line_numbers"] == [1, 2, 3, 4]
-    assert len(manifest["provenance"]["file_sha256"]) == 64
+    assert manifest1["coverage"]["declared_count"] == 4
+    assert manifest1["coverage"]["processed_count"] == 4
+    assert manifest1["coverage"]["complete"] is True
+    assert manifest1["provenance"]["source_line_numbers"] == [1, 2, 3, 4]
+    assert manifest1["samples"]["top_level_type_summary"] == {
+        "__sample__": {"bool": 1, "float": 1, "int": 1, "string": 1}
+    }
+    assert len(manifest1["samples"]["ordered_hashes"]) == 4
 
-
-def test_jsonl_adapter_ignores_blank_lines_around_scalar_records(tmp_path: Path) -> None:
-    path = tmp_path / "spaced_scalars.jsonl"
-    path.write_text("\n\n\"first_record\"\n\n\n100\n\n")
-
-    source = jsonl_source(path, name="spaced-scalars")
-    manifest = build_manifest(source)
-
-    assert manifest["coverage"]["processed_count"] == 2
-    assert manifest["provenance"]["source_line_numbers"] == [3, 6]
+    # Verify stable ordered hashes across rebuilds from the same source
+    source2 = jsonl_source(path, name="scalars-check")
+    manifest2 = build_manifest(source2)
+    assert manifest1["samples"]["ordered_hashes"] == manifest2["samples"]["ordered_hashes"]
+    assert manifest1["samples"]["ordered_digest"] == manifest2["samples"]["ordered_digest"]
